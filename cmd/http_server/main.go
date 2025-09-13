@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"net"
 	"net/http"
@@ -15,11 +16,11 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 	"github.com/neogan74/rocket/pkg/models"
-	"google.golang.org/genproto/googleapis/storage/v2"
 )
 
 const (
-	httpPort = ":8080"
+	httpPort        = ":8080"
+	shutdownTimeout = 5 * time.Second
 )
 
 func main() {
@@ -71,7 +72,7 @@ func main() {
 
 }
 
-func getWeatherHandler(w http.ResponseWriter, r *http.Request) http.HandlerFunc {
+func getWeatherHandler(storage *models.InMemoryWeatherStorage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		city := chi.URLParam(r, "city")
 		if city == "" {
@@ -86,5 +87,28 @@ func getWeatherHandler(w http.ResponseWriter, r *http.Request) http.HandlerFunc 
 		}
 
 		render.JSON(w, r, weather)
+	}
+}
+
+func updateWeatherHandler(storage *models.InMemoryWeatherStorage) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		city := chi.URLParam(r, "city")
+		if city == "" {
+			http.Error(w, "City parameter is required", http.StatusBadRequest)
+			return
+		}
+
+		var weatherUpdate models.Weather
+		if err := json.NewDecoder(r.Body).Decode(&weatherUpdate); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		weatherUpdate.City = city
+
+		weatherUpdate.UpdatedAt = time.Now()
+		storage.UpdateWeather(&weatherUpdate)
+
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
