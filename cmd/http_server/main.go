@@ -1,9 +1,21 @@
 package main
 
 import (
+	"context"
+	"log"
+	"net"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/render"
+	"github.com/neogan74/rocket/pkg/models"
+	"google.golang.org/genproto/googleapis/storage/v2"
 )
 
 const (
@@ -11,9 +23,52 @@ const (
 )
 
 func main() {
+	storage := models.NewInMemoryWeatherStorage()
+
 	r := chi.NewRouter()
 
-	r.Get("/weather", getWeatherHandler)
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
+	r.Use(middleware.Timeout(60 * time.Second))
+	r.Use(render.SetContentType(render.ContentTypeJSON))
+
+	r.Route("/api/v1/weather", func(r chi.Router) {
+		r.Get("/{city}", getWeatherHandler(storage))
+		r.Put("/{city}", updateWeatherHandler(storage))
+	})
+
+	server := &http.Server{
+		Addr:              net.JoinHostPort("localhost", httpPort),
+		Handler:           r,
+		ReadHeaderTimeout: 10,
+	}
+
+	go func() {
+		log.Printf(" HTTP server listening on %s", httpPort)
+		err := server.ListenAndServe()
+		if err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Could not start HTTP server: %v", err)
+		}
+	}()
+
+	// Graceful shutdown
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Println("🛑 Завершение работы сервера...")
+
+	// Создаем контекст с таймаутом для остановки сервера
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+
+	err := server.Shutdown(ctx)
+	if err != nil {
+		log.Printf("❌ Ошибка при остановке сервера: %v\n", err)
+	}
+
+	log.Println("✅ Сервер остановлен")
+
 }
 
 func getWeatherHandler(w http.ResponseWriter, r *http.Request) http.HandlerFunc {
