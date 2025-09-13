@@ -15,7 +15,12 @@ output:
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
-  uniq-by-line: 
+  uniq-by-line: true
+
+linters:
+  default: standard ## Use the default linters
+  enable:
+    - govet
   
 
   
