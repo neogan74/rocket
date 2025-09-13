@@ -34,9 +34,9 @@ func (s *InMemoryWeatherStorage) GetWeather(city string) *Weather {
 }
 
 // UpdateWeather updates or adds the weather data for a specific city.
-func (s *InMemoryWeatherStorage) UpdateWeather(city string, weather *Weather) {
+func (s *InMemoryWeatherStorage) UpdateWeather(weather *Weather) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.weathers[city] = weather
+	s.weathers[weather.City] = weather
 }
